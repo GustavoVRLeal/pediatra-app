@@ -24,18 +24,21 @@ model User {
 }
 
 model Patient {
-  id           String     @id @default(uuid())
-  name         String 
-  age          Int
-  weight       Float
-  responsible  String
-  phone        String
-  createdAt    DateTime    @default(now())
+  id              String     @id @default(uuid())
+  name            String 
+  birthDate       DateTime
+  weight          Float
+  height          Float
+  guardianName    String
+  guardianEmail   String 
+  guardianPhone   String
 
-  doctorId     String
-  doctor       User        @relation(fields: [doctorId], references: [id])
+  pediatricianId  String
+  pediatrician    User        @relation(fields: [pediatricianId], references: [id])
 
-  forms        Form[]
+  forms           Form[]
+
+  createdAt       DateTime @default(now())
 }
 
 model Form {
