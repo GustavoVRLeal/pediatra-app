@@ -44,18 +44,26 @@ model Patient {
 model Form {
   id          String     @id @default(uuid())
   title       String 
-  createdAt   DateTime   @default(now())
+  description String?
+  status      FormStatus @default(DRAFT)
+
 
   patientId   String 
   patient     Patient    @relation(fields: [patientId], references: [id])
 
   questions   Question[]
+
+  createdAt   DateTime   @default(now())
+  updateAt    DateTime   @updatedAt
+
 }
 
 model Question {
   id             String       @id @default(uuid())
   question       String
   type           String
+  required       Boolean @default(false)
+  order          Int
 
   formId         String
   form           Form         @relation(fields: [formId], references: [id])
@@ -69,4 +77,11 @@ model Answer {
 
   questionId  String
   question    Question    @relation(fields: [questionId], references: [id])
+}
+
+enum FormStatus {
+  DRAFT         /* Formulário sendo criado pelo pediatra */
+  SENT          /* Formulário enviado ao responsável */
+  ANSWERED      /* Responsável respondeu */
+  CLOSED        /* Formulário encerrado, sem permitir novas respostas */
 }
