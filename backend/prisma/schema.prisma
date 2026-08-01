@@ -38,7 +38,7 @@ model Patient {
 
   forms           Form[]
 
-  createdAt       DateTime @default(now())
+  createdAt       DateTime    @default(now())
 }
 
 model Form {
@@ -61,14 +61,14 @@ model Form {
 model Question {
   id             String       @id @default(uuid())
   question       String
-  type           String
-  required       Boolean @default(false)
+  type           QuestionType
+  required       Boolean      @default(false)
   order          Int
 
   formId         String
   form           Form         @relation(fields: [formId], references: [id])
 
-  answer         Answer[]
+  answers         Answer[]
 }
 
 model Answer {
@@ -85,3 +85,12 @@ enum FormStatus {
   ANSWERED      /* Responsável respondeu */
   CLOSED        /* Formulário encerrado, sem permitir novas respostas */
 }
+
+enum QuestionType {
+  TEXT
+  NUMBER
+  BOOLEAN
+  DATE 
+  MULTIPLE_CHOICE
+}
+

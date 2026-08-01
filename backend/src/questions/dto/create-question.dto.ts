@@ -1,6 +1,8 @@
+import { QuestionType } from '@prisma/client';
+
 export class CreateQuestionDto {
   question!: string;
-  type!: string;
+  type!: QuestionType;
   required!: boolean;
   order!: number;
 }
