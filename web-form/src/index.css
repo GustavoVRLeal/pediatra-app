@@ -126,3 +126,48 @@ h1 {
 .message h1 {
   color: var(--text);
 }
+
+/* Erros e envio (etapa 5.2) */
+.question.has-error textarea,
+.question.has-error input[type='text'],
+.question.has-error input[type='date'],
+.question.has-error .choice {
+  border-color: var(--danger);
+}
+
+.field-error {
+  color: var(--danger);
+  font-size: 0.875rem;
+  margin: 6px 0 0;
+}
+
+.submit-error {
+  color: var(--danger);
+  background: #fdecea;
+  border: 1px solid #f5c6c0;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 20px 0 0;
+}
+
+.submit {
+  width: 100%;
+  margin-top: 24px;
+  padding: 12px;
+  font: inherit;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--primary);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.submit:hover:not(:disabled) {
+  background: #22679c;
+}
+
+.submit:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}

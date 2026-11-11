@@ -4,15 +4,16 @@ interface Props {
   question: PublicQuestion;
   value: string;
   onChange: (value: string) => void;
+  error?: string;
 }
 
 /* Exibe o campo adequado para cada tipo de pergunta.
    Todos os valores são guardados como texto, que é o formato aceito pelo backend. */
-export function QuestionField({ question, value, onChange }: Props) {
+export function QuestionField({ question, value, onChange, error }: Props) {
   const inputId = `q-${question.id}`;
 
   return (
-    <fieldset className="question">
+    <fieldset className={error ? 'question has-error' : 'question'}>
       <legend>
         {question.question}
         {question.required && (
@@ -69,6 +70,8 @@ export function QuestionField({ question, value, onChange }: Props) {
           ))}
         </div>
       )}
+
+      {error && <p className="field-error">{error}</p>}
     </fieldset>
   );
 }

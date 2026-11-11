@@ -27,6 +27,32 @@ export interface PublicForm {
   questions: PublicQuestion[];
 }
 
+/* Envia um preenchimento. Só as perguntas respondidas são enviadas. */
+export async function submitResponse(
+  token: string,
+  answers: Record<string, string>,
+): Promise<void> {
+  const body = {
+    answers: Object.entries(answers)
+      .filter(([, answer]) => answer.trim() !== '')
+      .map(([questionId, answer]) => ({ questionId, answer })),
+  };
+
+  const response = await fetch(
+    `${API_URL}/public/forms/${encodeURIComponent(token)}/responses`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+  );
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new Error(data?.message ?? 'Não foi possível enviar as respostas');
+  }
+}
+
 /* Busca o formulário pelo token do link público */
 export async function getPublicForm(token: string): Promise<PublicForm> {
   const response = await fetch(
