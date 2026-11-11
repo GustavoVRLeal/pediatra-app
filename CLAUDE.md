@@ -4,47 +4,50 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository layout
 
-Monorepo for a pediatrics app: pediatricians (users) register patients and build questionnaires (forms) that a patient's guardian fills out via a public link.
+Monorepo for a pediatrics app (TCC/academic project): pediatricians (users) register patients and build questionnaires (forms); a patient's guardian fills them out via a public link, without an account. Only the pediatrician has an admin area.
 
-- `backend/` — NestJS 11 + Prisma 6 (PostgreSQL) REST API. The only implemented part.
-- `mobile/`, `web-form/` — placeholders (`.gitkeep` only). `web-form` is intended to be the guardian-facing public form.
+- `backend/` — NestJS 11 + Prisma 6.16.2 (PostgreSQL) REST API.
+- `web-form/` — React 19 + Vite + TypeScript page the guardian opens from the public link (`/formulario/<token>`). No router: the token is parsed from `window.location.pathname` in `App.tsx`.
+- `mobile/` — placeholder; planned React Native app (Expo) for the pediatrician's admin area.
 
-Code comments, error messages and commit messages are written in Portuguese (pt-BR); keep that convention.
+Code comments, UI text, error messages and commit messages are in Portuguese (pt-BR); keep that convention.
 
-## Commands (run from `backend/`)
+## Working agreements (from the user)
 
+- Work incrementally, one step at a time; wait for the user to test in Postman/browser before moving on.
+- Never run `prisma migrate reset` or anything that can drop data (including using the main DB as a shadow database). The user runs `prisma migrate dev` themselves.
+- Don't upgrade dependency versions or add libraries without justification and the user's approval.
+
+## Commands
+
+Backend (from `backend/`):
 ```bash
 npm run start:dev          # dev server with watch (port: $PORT or 3000)
-npm run build              # nest build -> dist/
-npm run lint               # eslint with --fix
-npm run format             # prettier (single quotes, trailing commas)
-npm test                   # unit tests (*.spec.ts under src/)
-npx jest src/forms/forms.service.spec.ts   # single test file
-npx jest -t "should be defined"            # tests matching a name
-npm run test:e2e           # e2e tests (test/*.e2e-spec.ts, config test/jest-e2e.json)
-
-npx prisma migrate dev --name <name>   # create + apply migration after editing schema.prisma
-npx prisma generate                    # regenerate client (needed for new enums/models in TS types)
+npm run build              # nest build -> dist/src/ (prisma.config.ts is compiled too, so `start:prod` / `node dist/main` is currently broken)
+npm run lint
+npm test                   # unit tests (*.spec.ts under src/); single file: npx jest src/forms/forms.service.spec.ts
+npm run test:e2e
+npx prisma migrate dev --name <name>   # stop the dev server first on Windows (query engine DLL is locked -> EPERM)
+npx prisma generate
 npx prisma studio
 ```
 
-`DATABASE_URL` is read from `backend/.env` (loaded by `prisma.config.ts` via `dotenv/config`).
+Web-form (from `web-form/`): `npm run dev` (http://localhost:5173), `npm run build` (tsc + vite build), `npm run lint` (oxlint). API URL from `VITE_API_URL`, default `http://localhost:3000`.
 
-## Architecture
+## Backend architecture
 
-- **Module per domain** in `backend/src/`: `auth`, `users`, `patients`, `forms`, `questions`, `answers`, each with controller/service/dto. Services talk to Prisma directly — no repository layer.
-- **PrismaModule is `@Global()`**: `PrismaService` (extends `PrismaClient`) can be injected anywhere without importing the module.
-- **Imports use `src/...` absolute paths** (resolved via tsconfig `baseUrl`), mixed with relative imports.
-- **Auth**: `POST /auth/register` (bcrypt-hashed password, requires unique `email` and `crm`) and `POST /auth/login` returns `{ access_token }`. JWT payload is `{ sub: userId, email }`; `JwtStrategy.validate` exposes it as `req.user = { userId, email }`. The JWT secret is currently hardcoded as `'jwt-secret-key'` in both `auth.module.ts` and `jwt.strategy.ts` — change both together. Protect routes with `@UseGuards(JwtAuthGuard)` (from `src/auth/guards/jwt-auth.guard`); `patients` and `forms` controllers are guarded, `answers` is not.
-- **Questions are created through the forms controller** (`POST/GET /forms/:id/questions`, via `QuestionsService` exported from `QuestionsModule`); `QuestionsController` itself is empty. Answers live at `POST/GET /questions/:id/answers`.
-- **No global `ValidationPipe` / class-validator**: DTOs are plain TS classes with `!`/`?` markers, so request bodies are not validated at runtime.
-- `patients.create` takes `pediatricianId` from the request body, not from the JWT user.
+- **Environment**: `main.ts` calls `process.loadEnvFile()` (native Node, no dotenv dependency) before bootstrap. `backend/.env` holds `DATABASE_URL`, `JWT_SECRET`, `PUBLIC_FORM_URL` (base of generated public links, e.g. `http://localhost:5173/formulario`). Because `.env` is loaded at runtime in `main.ts`, anything reading env at module-decoration time must be deferred (that's why `JwtModule.registerAsync` is used).
+- **Module per domain** in `src/`: `auth`, `users`, `patients`, `forms`, `questions`, `answers`, `prisma`. Services use Prisma directly. `PrismaModule` is `@Global()`. Imports use `src/...` absolute paths (tsconfig `baseUrl`). Interfaces used in decorated parameters must be imported with `import type` (isolatedModules + emitDecoratorMetadata).
+- **Errors**: global `PrismaExceptionFilter` (`src/prisma/prisma-exception.filter.ts`) maps P2002→409, P2003→409, P2025→404, `PrismaClientValidationError`→400. There is no global `ValidationPipe`/class-validator; DTOs are plain classes and validation is done by hand in services (`BadRequestException`/`ConflictException`).
+- **Auth & ownership**: JWT payload `{ sub, email }` → `req.user = { userId, email }`, read via `@CurrentUser()` (`src/auth/decorators/current-user.decorator.ts`). Every admin query is scoped by the ownership chain User → Patient → Form → Question/Answer (e.g. `where: { id, patient: { pediatricianId: userId } }`); foreign records return 404, not 403. `FormsService.assertOwner` guards form-level operations, including question routes. `pediatricianId` always comes from the token, never from the body.
+- **Routes**: questions are managed under `/forms/:id/questions[/:questionId]` (the `QuestionsController` is empty). Admin history: `GET /forms/:id/responses[/:responseId]`. Legacy `/questions/:id/answers` creates answers without a `FormResponse` (JWT + ownership protected).
+- **Public flow** (`PublicFormsController`, no guard, `/public/forms/:token`): `POST /forms/:id/public-link` stores a random `publicToken` and sets status `SENT` (regenerating invalidates the old link). `GET /public/forms/:token` returns only title/description/questions (no patient data, no answers) when status is `SENT` or `ANSWERED`. `POST /public/forms/:token/responses` with `{ answers: [{ questionId, answer }] }` validates everything in `FormsService.submitResponse` and creates one `FormResponse` with its `Answer`s in a transaction, then sets status `ANSWERED`.
 
 ### Data model (`backend/prisma/schema.prisma`)
 
-`User` (pediatrician) → `Patient` → `Form` → `Question` → `Answer`; `Form` → `FormResponse` → `Answer` (`Answer.formResponseId` is optional, so answers can currently exist without a submission).
+`User` → `Patient` → `Form` → `Question` → `Answer`; `Form` → `FormResponse` → `Answer` (`Answer.formResponseId` is optional for legacy answers).
 
-- `Form.status`: `DRAFT` → `SENT` → `ANSWERED` → `CLOSED`.
-- `Form.publicToken` (unique) backs the guardian's public link. `FormsService.generatePublicLink` (sets token + status `SENT`) and `findByPublicToken` (only returns `SENT` forms, without answers) exist but are **not yet exposed by any controller**; the generated URL points at `/public/forms/:token`.
-- `Question.type` is the `QuestionType` enum (`TEXT`, `NUMBER`, `BOOLEAN`, `DATE`, `MULTIPLE_CHOICE`); questions are always ordered by `order asc`.
-- Note the field is spelled `Form.updateAt` (not `updatedAt`).
+- `Form.status`: `DRAFT` → `SENT` → `ANSWERED` → `CLOSED` (`CLOSED`/`DRAFT` block the public link). Field is spelled `Form.updateAt`.
+- `Answer.answer` is always a String. `parseForType` in `FormsService` normalizes on submit: BOOLEAN accepts true/sim/s/1… and stores `"true"`/`"false"`; NUMBER accepts comma decimals and stores the dot form; DATE requires `YYYY-MM-DD`; MULTIPLE_CHOICE must match `Question.options` (case-insensitive) and stores the canonical option (single choice).
+- `Question.options String[]` is required (≥2, unique) for `MULTIPLE_CHOICE` and must be empty otherwise. To preserve history: questions with answers can't be deleted or change type, and options already answered can't be removed (409).
+- The VS Code Prisma extension may flag `url = env("DATABASE_URL")` as unsupported — that's a Prisma 7 rule; it is valid on 6.16.2.
