@@ -9,11 +9,14 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 @Module({
   imports: [
     UsersModule,
-    JwtModule.register({
-      secret: 'jwt-secret-key',
-      signOptions: {
-        expiresIn: '1d',
-      },
+    // registerAsync: lê o JWT_SECRET depois que o .env foi carregado no main.ts
+    JwtModule.registerAsync({
+      useFactory: () => ({
+        secret: process.env.JWT_SECRET,
+        signOptions: {
+          expiresIn: '1d',
+        },
+      }),
     }),
     PassportModule,
   ],
