@@ -65,6 +65,7 @@ model Question {
   type     QuestionType
   required Boolean      @default(false)
   order    Int
+  options  String[]     @default([]) /* Opções de resposta, usadas apenas em MULTIPLE_CHOICE */
 
   formId String
   form   Form   @relation(fields: [formId], references: [id])

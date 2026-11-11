@@ -15,7 +15,29 @@ const PUBLIC_STATUSES: FormStatus[] = ['SENT', 'ANSWERED'];
 export class FormsService {
   constructor(private prisma: PrismaService) {}
 
-  async create(data: CreateFormDto) {
+  /* Garante que o formulário pertence a um paciente do pediatra autenticado.
+     Usado antes de qualquer operação administrativa sobre o formulário. */
+  async assertOwner(formId: string, userId: string) {
+    const form = await this.prisma.form.findFirst({
+      where: { id: formId, patient: { pediatricianId: userId } },
+    });
+
+    if (!form) {
+      throw new NotFoundException('Formulário não encontrado');
+    }
+
+    return form;
+  }
+
+  async create(data: CreateFormDto, userId: string) {
+    const patient = await this.prisma.patient.findFirst({
+      where: { id: data.patientId, pediatricianId: userId },
+    });
+
+    if (!patient) {
+      throw new NotFoundException('Paciente não encontrado');
+    }
+
     return this.prisma.form.create({
       data: {
         title: data.title,
@@ -25,19 +47,18 @@ export class FormsService {
     });
   }
 
-  async findAll() {
+  async findAll(userId: string) {
     return this.prisma.form.findMany({
+      where: { patient: { pediatricianId: userId } },
       include: {
         patient: true,
       },
     });
   }
 
-  async findOne(id: string) {
-    return this.prisma.form.findUnique({
-      where: {
-        id,
-      },
+  async findOne(id: string, userId: string) {
+    const form = await this.prisma.form.findFirst({
+      where: { id, patient: { pediatricianId: userId } },
       include: {
         patient: true,
         questions: {
@@ -50,18 +71,33 @@ export class FormsService {
         },
       },
     });
+
+    if (!form) {
+      throw new NotFoundException('Formulário não encontrado');
+    }
+
+    return form;
   }
 
-  async update(id: string, data: UpdateFormDto) {
+  async update(id: string, userId: string, data: UpdateFormDto) {
+    await this.assertOwner(id, userId);
+
+    // Só título e descrição podem ser alterados por aqui
+    // (status, publicToken e patientId não são aceitos do body)
     return this.prisma.form.update({
       where: {
         id,
       },
-      data,
+      data: {
+        title: data.title,
+        description: data.description,
+      },
     });
   }
 
-  async remove(id: string) {
+  async remove(id: string, userId: string) {
+    await this.assertOwner(id, userId);
+
     return this.prisma.form.delete({
       where: {
         id,
@@ -69,14 +105,8 @@ export class FormsService {
     });
   }
 
-  async generatePublicLink(id: string) {
-    const form = await this.prisma.form.findUnique({
-      where: { id },
-    });
-
-    if (!form) {
-      throw new NotFoundException('Formulário não encontrado');
-    }
+  async generatePublicLink(id: string, userId: string) {
+    await this.assertOwner(id, userId);
 
     const publicToken = randomBytes(32).toString('hex');
 
@@ -114,6 +144,7 @@ export class FormsService {
             type: true,
             required: true,
             order: true,
+            options: true,
           },
         },
       },
@@ -158,7 +189,7 @@ export class FormsService {
       // Resposta vazia em pergunta opcional é simplesmente ignorada
       if (value === '') continue;
 
-      const parsed = this.parseForType(question.type, value);
+      const parsed = this.parseForType(question.type, value, question.options);
 
       if (parsed === null) {
         throw new BadRequestException(
@@ -210,9 +241,9 @@ export class FormsService {
 
   /* Histórico de preenchimentos de um formulário (área do pediatra).
      Mais recentes primeiro; respostas na ordem das perguntas. */
-  async findResponses(formId: string) {
-    const form = await this.prisma.form.findUnique({
-      where: { id: formId },
+  async findResponses(formId: string, userId: string) {
+    const form = await this.prisma.form.findFirst({
+      where: { id: formId, patient: { pediatricianId: userId } },
       select: { id: true, title: true, status: true },
     });
 
@@ -234,9 +265,13 @@ export class FormsService {
   }
 
   /* Um preenchimento específico do formulário */
-  async findResponse(formId: string, responseId: string) {
+  async findResponse(formId: string, responseId: string, userId: string) {
     const response = await this.prisma.formResponse.findFirst({
-      where: { id: responseId, formId },
+      where: {
+        id: responseId,
+        formId,
+        form: { patient: { pediatricianId: userId } },
+      },
       include: this.responseInclude,
     });
 
@@ -290,7 +325,11 @@ export class FormsService {
 
   /* Valida a resposta conforme o tipo da pergunta e devolve o valor
      padronizado para gravar no banco, ou null se for inválida. */
-  private parseForType(type: QuestionType, value: string): string | null {
+  private parseForType(
+    type: QuestionType,
+    value: string,
+    options: string[] = [],
+  ): string | null {
     switch (type) {
       case 'NUMBER': {
         const num = Number(value.replace(',', '.'));
@@ -307,8 +346,14 @@ export class FormsService {
           !Number.isNaN(Date.parse(value))
           ? value
           : null;
+      case 'MULTIPLE_CHOICE': {
+        // Aceita a opção sem diferenciar maiúsculas e grava o texto oficial
+        const match = options.find(
+          (o) => o.toLowerCase() === value.toLowerCase(),
+        );
+        return match ?? null;
+      }
       case 'TEXT':
-      case 'MULTIPLE_CHOICE': // opções serão validadas na etapa 4
       default:
         return value;
     }
