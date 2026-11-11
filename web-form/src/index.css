@@ -1,0 +1,128 @@
+:root {
+  --bg: #f3f6f9;
+  --surface: #ffffff;
+  --text: #1f2a37;
+  --muted: #5b6878;
+  --border: #d5dde6;
+  --primary: #2a7ab8;
+  --danger: #c0392b;
+  --radius: 10px;
+
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+}
+
+.page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+}
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px 20px;
+}
+
+h1 {
+  font-size: 1.5rem;
+  margin: 0 0 8px;
+}
+
+.description {
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+
+.hint {
+  font-size: 0.875rem;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+
+.required {
+  color: var(--danger);
+}
+
+.question {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0;
+  padding: 20px 0 4px;
+}
+
+.question legend {
+  font-weight: 600;
+  padding: 20px 0 10px;
+  float: left;
+  width: 100%;
+}
+
+.question textarea,
+.question input[type='text'],
+.question input[type='date'] {
+  width: 100%;
+  font: inherit;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.question textarea:focus,
+.question input:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  clear: both;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.choice:has(input:checked) {
+  border-color: var(--primary);
+  background: #eaf3fa;
+}
+
+.choice input {
+  accent-color: var(--primary);
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.loading,
+.message {
+  text-align: center;
+  color: var(--muted);
+}
+
+.message h1 {
+  color: var(--text);
+}

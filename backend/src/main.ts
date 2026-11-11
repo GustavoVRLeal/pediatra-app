@@ -8,6 +8,8 @@ process.loadEnvFile();
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.useGlobalFilters(new PrismaExceptionFilter());
+  // Permite que o web-form (outro endereço/porta) chame a API pelo navegador
+  app.enableCors();
   await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();

@@ -120,7 +120,8 @@ export class FormsService {
 
     return {
       message: 'Link público gerado com sucesso',
-      publicLink: `http://localhost:3000/public/forms/${updatedForm.publicToken}`,
+      // PUBLIC_FORM_URL no .env aponta para o web-form (ex.: http://localhost:5173/formulario)
+      publicLink: `${process.env.PUBLIC_FORM_URL ?? 'http://localhost:3000/public/forms'}/${updatedForm.publicToken}`,
     };
   }
 
