@@ -1,45 +1,100 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { Link, Stack, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/auth';
 import { ApiError, apiRequest } from '@/services/api';
+import type { Patient } from '@/types';
+import { formatAge } from '@/utils/format';
 import { colors, ui } from '@/theme';
 
-/* Tela inicial provisória: confirma que o token funciona buscando os pacientes.
-   Será substituída pela lista de pacientes na etapa 5.4. */
-export default function HomeScreen() {
+/* Lista de pacientes do pediatra logado. */
+export default function PatientsScreen() {
   const { token, signOut } = useAuth();
-  const [patientCount, setPatientCount] = useState<number | null>(null);
+  const [patients, setPatients] = useState<Patient[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    apiRequest<unknown[]>('/patients', { token })
-      .then((patients) => setPatientCount(patients.length))
-      .catch((err: ApiError) => {
-        if (err.status === 401) signOut(); // token inválido ou expirado
-        else setError(err.message);
-      });
+  const loadPatients = useCallback(async () => {
+    try {
+      const data = await apiRequest<Patient[]>('/patients', { token });
+      data.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+      setPatients(data);
+      setError(null);
+    } catch (err) {
+      if ((err as ApiError).status === 401) signOut(); // token expirado
+      else setError((err as Error).message);
+    }
   }, [token, signOut]);
+
+  // Recarrega sempre que a tela volta a aparecer (ex.: depois de cadastrar)
+  useFocusEffect(
+    useCallback(() => {
+      loadPatients();
+    }, [loadPatients]),
+  );
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    await loadPatients();
+    setRefreshing(false);
+  }
 
   return (
     <View style={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.title}>Bem-vindo!</Text>
+      <Stack.Screen
+        options={{
+          title: 'Pacientes',
+          headerRight: () => (
+            <Link href="/patients/new" asChild>
+              <Pressable hitSlop={8}>
+                <Text style={styles.headerButton}>+ Novo</Text>
+              </Pressable>
+            </Link>
+          ),
+        }}
+      />
 
-        {error ? (
-          <Text style={ui.error}>{error}</Text>
-        ) : patientCount === null ? (
-          <ActivityIndicator color={colors.primary} />
-        ) : (
-          <Text style={styles.text}>
-            Você tem {patientCount}{' '}
-            {patientCount === 1 ? 'paciente cadastrado' : 'pacientes cadastrados'}.
-          </Text>
-        )}
-      </View>
+      {error && <Text style={[ui.error, styles.margin]}>{error}</Text>}
 
-      <Pressable style={ui.buttonOutline} onPress={signOut}>
-        <Text style={ui.buttonOutlineText}>Sair</Text>
-      </Pressable>
+      {patients === null && !error ? (
+        <ActivityIndicator style={styles.margin} color={colors.primary} />
+      ) : (
+        <FlatList
+          data={patients ?? []}
+          keyExtractor={(p) => p.id}
+          contentContainerStyle={styles.list}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          }
+          ListEmptyComponent={
+            <Text style={styles.empty}>
+              Nenhum paciente cadastrado.{'\n'}Toque em “+ Novo” para começar.
+            </Text>
+          }
+          renderItem={({ item }) => (
+            <Link href={{ pathname: '/patients/[id]', params: { id: item.id } }} asChild>
+              <Pressable style={styles.card}>
+                <Text style={styles.name}>{item.name}</Text>
+                <Text style={styles.info}>{formatAge(item.birthDate)}</Text>
+                <Text style={styles.info}>Responsável: {item.guardianName}</Text>
+              </Pressable>
+            </Link>
+          )}
+          ListFooterComponent={
+            <Pressable style={[ui.buttonOutline, styles.logout]} onPress={signOut}>
+              <Text style={ui.buttonOutlineText}>Sair</Text>
+            </Pressable>
+          }
+        />
+      )}
     </View>
   );
 }
@@ -47,24 +102,45 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  margin: {
+    margin: 16,
+  },
+  list: {
     padding: 16,
-    gap: 16,
+    gap: 12,
+  },
+  headerButton: {
+    color: colors.primary,
+    fontSize: 16,
+    fontWeight: '600',
   },
   card: {
     backgroundColor: colors.surface,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 20,
-    gap: 12,
+    padding: 16,
+    gap: 2,
   },
-  title: {
-    fontSize: 20,
-    fontWeight: '700',
+  name: {
+    fontSize: 17,
+    fontWeight: '600',
     color: colors.text,
+    marginBottom: 2,
   },
-  text: {
-    fontSize: 16,
-    color: colors.text,
+  info: {
+    fontSize: 14,
+    color: colors.muted,
+  },
+  empty: {
+    textAlign: 'center',
+    color: colors.muted,
+    fontSize: 15,
+    marginTop: 32,
+    lineHeight: 22,
+  },
+  logout: {
+    marginTop: 12,
   },
 });
