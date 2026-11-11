@@ -48,6 +48,26 @@ export class FormsController {
     return this.formsService.remove(id);
   }
 
+  /* Gera o token público do formulário e muda o status para SENT */
+  @Post(':id/public-link')
+  async generatePublicLink(@Param('id') id: string) {
+    return this.formsService.generatePublicLink(id);
+  }
+
+  /* Histórico de preenchimentos do formulário */
+  @Get(':id/responses')
+  async findResponses(@Param('id') id: string) {
+    return this.formsService.findResponses(id);
+  }
+
+  @Get(':id/responses/:responseId')
+  async findResponse(
+    @Param('id') id: string,
+    @Param('responseId') responseId: string,
+  ) {
+    return this.formsService.findResponse(id, responseId);
+  }
+
   @Post(':id/questions')
   async createQuestion(
     @Param('id') formId: string,
