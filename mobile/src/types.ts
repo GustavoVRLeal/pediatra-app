@@ -44,4 +44,5 @@ export interface Question {
 export interface FormDetail extends Form {
   patient: Patient;
   questions: Question[];
+  publicLink: string | null; // link do web-form, quando já foi gerado
 }

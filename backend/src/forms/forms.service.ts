@@ -15,6 +15,13 @@ import { SubmitResponseDto } from './dto/submit-response.dto';
    ANSWERED continua aceitando para permitir vários preenchimentos. */
 const PUBLIC_STATUSES: FormStatus[] = ['SENT', 'ANSWERED'];
 
+/* Monta o link público a partir do token.
+   PUBLIC_FORM_URL no .env aponta para o web-form (ex.: http://localhost:5173/formulario) */
+function buildPublicLink(publicToken: string) {
+  const base = process.env.PUBLIC_FORM_URL ?? 'http://localhost:3000/public/forms';
+  return `${base}/${publicToken}`;
+}
+
 @Injectable()
 export class FormsService {
   constructor(private prisma: PrismaService) {}
@@ -88,7 +95,10 @@ export class FormsService {
       throw new NotFoundException('Formulário não encontrado');
     }
 
-    return form;
+    return {
+      ...form,
+      publicLink: form.publicToken ? buildPublicLink(form.publicToken) : null,
+    };
   }
 
   async update(id: string, userId: string, data: UpdateFormDto) {
@@ -144,9 +154,17 @@ export class FormsService {
   async generatePublicLink(id: string, userId: string) {
     await this.assertOwner(id, userId);
 
+    // Não faz sentido enviar ao responsável um formulário vazio
+    const questions = await this.prisma.question.count({ where: { formId: id } });
+    if (questions === 0) {
+      throw new BadRequestException(
+        'Adicione pelo menos uma pergunta antes de gerar o link',
+      );
+    }
+
     const publicToken = randomBytes(32).toString('hex');
 
-    const updatedForm = await this.prisma.form.update({
+    await this.prisma.form.update({
       where: { id },
       data: {
         publicToken,
@@ -156,8 +174,7 @@ export class FormsService {
 
     return {
       message: 'Link público gerado com sucesso',
-      // PUBLIC_FORM_URL no .env aponta para o web-form (ex.: http://localhost:5173/formulario)
-      publicLink: `${process.env.PUBLIC_FORM_URL ?? 'http://localhost:3000/public/forms'}/${updatedForm.publicToken}`,
+      publicLink: buildPublicLink(publicToken),
     };
   }
 

@@ -14,14 +14,15 @@ import { Link, router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-
 import { useAuth } from '@/contexts/auth';
 import { apiRequest } from '@/services/api';
 import { FormField } from '@/components/FormField';
+import { PublicLinkCard } from '@/components/PublicLinkCard';
 import type { FormDetail } from '@/types';
 import { formatDate } from '@/utils/format';
 import { formStatusInfo, questionTypeLabel } from '@/utils/formStatus';
 import { colors, ui } from '@/theme';
 
 /* Tela do formulário: dados, edição de título/descrição, perguntas e exclusão.
-   As perguntas são criadas/editadas em /questions/edit.
-   Link público e respostas vêm nas próximas etapas. */
+   As perguntas são criadas/editadas em /questions/edit e o link público
+   fica no PublicLinkCard. As respostas vêm na próxima etapa. */
 export default function FormDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { token } = useAuth();
@@ -217,6 +218,8 @@ export default function FormDetailScreen() {
             <Text style={styles.hint}>Toque em uma pergunta para editar ou excluir.</Text>
           )}
         </View>
+
+        <PublicLinkCard form={form} token={token} onChanged={loadForm} />
 
         <Pressable
           style={[styles.deleteButton, (deleting || editing) && styles.disabled]}
