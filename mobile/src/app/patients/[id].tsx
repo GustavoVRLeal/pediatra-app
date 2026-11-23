@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -8,26 +8,38 @@ import {
   Text,
   View,
 } from 'react-native';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { Link, router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/auth';
 import { apiRequest } from '@/services/api';
-import type { Patient } from '@/types';
+import type { Form, Patient } from '@/types';
 import { formatAge, formatDate, formatNumber } from '@/utils/format';
+import { formStatusInfo } from '@/utils/formStatus';
 import { colors, ui } from '@/theme';
 
-/* Detalhes do paciente. Os formulários do paciente entram aqui na etapa 5.5. */
+/* Detalhes do paciente e a lista dos formulários dele. */
 export default function PatientDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { token } = useAuth();
   const [patient, setPatient] = useState<Patient | null>(null);
+  const [forms, setForms] = useState<Form[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  useEffect(() => {
-    apiRequest<Patient>(`/patients/${id}`, { token })
-      .then(setPatient)
-      .catch((err: Error) => setError(err.message));
-  }, [id, token]);
+  // Recarrega ao voltar para a tela (ex.: depois de criar um formulário)
+  useFocusEffect(
+    useCallback(() => {
+      Promise.all([
+        apiRequest<Patient>(`/patients/${id}`, { token }),
+        apiRequest<Form[]>(`/forms?patientId=${id}`, { token }),
+      ])
+        .then(([patientData, formsData]) => {
+          setPatient(patientData);
+          setForms(formsData);
+          setError(null);
+        })
+        .catch((err: Error) => setError(err.message));
+    }, [id, token]),
+  );
 
   function confirmDelete() {
     Alert.alert(
@@ -78,6 +90,24 @@ export default function PatientDetailScreen() {
         <Row label="Telefone" value={patient.guardianPhone} />
       </View>
 
+      <View style={styles.card}>
+        <Text style={styles.section}>Formulários</Text>
+
+        {forms?.length === 0 && (
+          <Text style={styles.empty}>Nenhum formulário criado para este paciente.</Text>
+        )}
+
+        {forms?.map((form) => (
+          <FormItem key={form.id} form={form} />
+        ))}
+
+        <Link href={{ pathname: '/forms/new', params: { patientId: patient.id } }} asChild>
+          <Pressable style={ui.buttonOutline}>
+            <Text style={styles.newFormText}>+ Novo formulário</Text>
+          </Pressable>
+        </Link>
+      </View>
+
       <Pressable style={[styles.deleteButton, deleting && styles.disabled]} onPress={confirmDelete} disabled={deleting}>
         <Text style={styles.deleteText}>{deleting ? 'Excluindo...' : 'Excluir paciente'}</Text>
       </Pressable>
@@ -94,7 +124,70 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
+/* Um formulário da lista: título, status, data e contadores. Toque abre a tela do formulário. */
+function FormItem({ form }: { form: Form }) {
+  const status = formStatusInfo[form.status];
+  const questions = form._count?.questions ?? 0;
+  const responses = form._count?.responses ?? 0;
+
+  return (
+    <Link href={{ pathname: '/forms/[id]', params: { id: form.id } }} asChild>
+      <Pressable style={styles.formItem}>
+        <View style={styles.formHeader}>
+          <Text style={styles.formTitle} numberOfLines={2}>{form.title}</Text>
+          <Text style={[styles.badge, { color: status.color, backgroundColor: status.bg }]}>
+            {status.label}
+          </Text>
+        </View>
+        <Text style={styles.formInfo}>
+          Criado em {formatDate(form.createdAt)} · {questions} {questions === 1 ? 'pergunta' : 'perguntas'} ·{' '}
+          {responses} {responses === 1 ? 'resposta' : 'respostas'}
+        </Text>
+      </Pressable>
+    </Link>
+  );
+}
+
 const styles = StyleSheet.create({
+  empty: {
+    fontSize: 15,
+    color: colors.muted,
+  },
+  formItem: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: 10,
+    gap: 4,
+  },
+  formHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  formTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  badge: {
+    fontSize: 12,
+    fontWeight: '700',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  formInfo: {
+    fontSize: 13,
+    color: colors.muted,
+  },
+  newFormText: {
+    color: colors.primary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
   margin: {
     margin: 16,
   },

@@ -3,7 +3,11 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateFormDto } from './dto/create-form.dto';
 import { UpdateFormDto } from './dto/update-form.dto';
 import { randomBytes } from 'crypto';
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { FormStatus, QuestionType } from '@prisma/client';
 import { SubmitResponseDto } from './dto/submit-response.dto';
 
@@ -47,11 +51,18 @@ export class FormsService {
     });
   }
 
-  async findAll(userId: string) {
+  /* Lista os formulários do pediatra. Com patientId, filtra pelos formulários
+     daquele paciente (usado na tela de detalhes do paciente no app). */
+  async findAll(userId: string, patientId?: string) {
     return this.prisma.form.findMany({
-      where: { patient: { pediatricianId: userId } },
+      where: {
+        patient: { pediatricianId: userId },
+        ...(patientId ? { patientId } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
       include: {
         patient: true,
+        _count: { select: { questions: true, responses: true } },
       },
     });
   }
@@ -69,6 +80,7 @@ export class FormsService {
             order: 'asc',
           },
         },
+        _count: { select: { responses: true } },
       },
     });
 
@@ -82,27 +94,51 @@ export class FormsService {
   async update(id: string, userId: string, data: UpdateFormDto) {
     await this.assertOwner(id, userId);
 
+    // Título, se enviado, não pode ficar vazio
+    const title = data.title?.trim();
+    if (data.title !== undefined && !title) {
+      throw new BadRequestException('O título do formulário é obrigatório');
+    }
+
     // Só título e descrição podem ser alterados por aqui
-    // (status, publicToken e patientId não são aceitos do body)
+    // (status, publicToken e patientId não são aceitos do body).
+    // Descrição vazia é gravada como null (remove a descrição).
     return this.prisma.form.update({
       where: {
         id,
       },
       data: {
-        title: data.title,
-        description: data.description,
+        title,
+        description:
+          data.description === undefined
+            ? undefined
+            : data.description.trim() || null,
       },
     });
   }
 
+  /* Exclui o formulário e suas perguntas, desde que ninguém tenha respondido.
+     Com respostas, a exclusão é bloqueada para preservar o histórico. */
   async remove(id: string, userId: string) {
     await this.assertOwner(id, userId);
 
-    return this.prisma.form.delete({
-      where: {
-        id,
-      },
-    });
+    const [responses, answers] = await Promise.all([
+      this.prisma.formResponse.count({ where: { formId: id } }),
+      this.prisma.answer.count({ where: { question: { formId: id } } }),
+    ]);
+
+    if (responses > 0 || answers > 0) {
+      throw new ConflictException(
+        'Não é possível excluir: o formulário já possui respostas',
+      );
+    }
+
+    const [, form] = await this.prisma.$transaction([
+      this.prisma.question.deleteMany({ where: { formId: id } }),
+      this.prisma.form.delete({ where: { id } }),
+    ]);
+
+    return form;
   }
 
   async generatePublicLink(id: string, userId: string) {

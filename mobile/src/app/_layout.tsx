@@ -29,6 +29,9 @@ function RootNavigator() {
         <Stack.Screen name="index" options={{ title: 'Pacientes' }} />
         <Stack.Screen name="patients/new" options={{ title: 'Novo paciente' }} />
         <Stack.Screen name="patients/[id]" options={{ title: 'Paciente' }} />
+        <Stack.Screen name="forms/new" options={{ title: 'Novo formulário' }} />
+        <Stack.Screen name="forms/[id]" options={{ title: 'Formulário' }} />
+        <Stack.Screen name="questions/edit" options={{ title: 'Pergunta' }} />
       </Stack.Protected>
 
       <Stack.Protected guard={!token}>

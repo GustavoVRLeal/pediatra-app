@@ -13,19 +13,49 @@ import { UpdateQuestionDto } from './dto/update-question.dto';
 export class QuestionsService {
   constructor(private prisma: PrismaService) {}
 
+  /* Cria uma pergunta no formulário. Sem "order", ela entra no final da lista. */
   async create(formId: string, data: CreateQuestionDto) {
+    const text = typeof data.question === 'string' ? data.question.trim() : '';
+    if (!text) {
+      throw new BadRequestException('O texto da pergunta é obrigatório');
+    }
+
+    if (!Object.values(QuestionType).includes(data.type)) {
+      throw new BadRequestException(
+        `Tipo inválido. Use: ${Object.values(QuestionType).join(', ')}`,
+      );
+    }
+
+    if (data.required !== undefined && typeof data.required !== 'boolean') {
+      throw new BadRequestException('"required" deve ser true ou false');
+    }
+
+    let order = data.order;
+    if (order === undefined) {
+      const last = await this.prisma.question.findFirst({
+        where: { formId },
+        orderBy: { order: 'desc' },
+        select: { order: true },
+      });
+      order = last ? last.order + 1 : 1;
+    } else if (!Number.isInteger(order) || order < 0) {
+      throw new BadRequestException('"order" deve ser um número inteiro');
+    }
+
     return this.prisma.question.create({
       data: {
-        question: data.question,
+        question: text,
         type: data.type,
-        required: data.required,
-        order: data.order,
+        required: data.required ?? false,
+        order,
         options: this.resolveOptions(data.type, data.options),
         formId,
       },
     });
   }
 
+  /* Lista as perguntas com a quantidade de respostas de cada uma
+     (o app usa isso para avisar o que não pode ser alterado). */
   async findByForm(formId: string) {
     return this.prisma.question.findMany({
       where: {
@@ -34,6 +64,7 @@ export class QuestionsService {
       orderBy: {
         order: 'asc',
       },
+      include: { _count: { select: { answers: true } } },
     });
   }
 

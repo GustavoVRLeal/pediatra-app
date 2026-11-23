@@ -7,6 +7,7 @@ import {
   Param,
   Delete,
   Patch,
+  Query,
 } from '@nestjs/common';
 import { JwtAuthGuard } from 'src/auth/guards/jwt-auth.guard';
 import { CurrentUser, type AuthUser } from 'src/auth/decorators/current-user.decorator';
@@ -32,9 +33,13 @@ export class FormsController {
     return this.formsService.create(data, user.userId);
   }
 
+  /* GET /forms ou GET /forms?patientId=<id> */
   @Get()
-  async findAll(@CurrentUser() user: AuthUser) {
-    return this.formsService.findAll(user.userId);
+  async findAll(
+    @CurrentUser() user: AuthUser,
+    @Query('patientId') patientId?: string,
+  ) {
+    return this.formsService.findAll(user.userId, patientId);
   }
 
   @Get(':id')
