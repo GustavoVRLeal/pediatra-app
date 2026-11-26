@@ -1,9 +1,10 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import { login } from '@/services/api';
+import { login, register, type RegisterData } from '@/services/api';
 
 interface AuthContextValue {
   token: string | null;
   signIn: (email: string, password: string) => Promise<void>;
+  signUp: (data: RegisterData) => Promise<void>;
   signOut: () => void;
 }
 
@@ -19,12 +20,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(access_token);
   }
 
+  /* Cadastra o pediatra e já deixa logado com o token devolvido */
+  async function signUp(data: RegisterData) {
+    const { access_token } = await register(data);
+    setToken(access_token);
+  }
+
   function signOut() {
     setToken(null);
   }
 
   return (
-    <AuthContext.Provider value={{ token, signIn, signOut }}>
+    <AuthContext.Provider value={{ token, signIn, signUp, signOut }}>
       {children}
     </AuthContext.Provider>
   );

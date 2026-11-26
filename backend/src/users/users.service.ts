@@ -16,9 +16,17 @@ export class UsersService {
     });
   }
 
+  /* Busca ignorando maiúsculas/minúsculas, para que "Joao@Email.com"
+     e "joao@email.com" sejam a mesma conta (inclusive cadastros antigos). */
   async findByEmail(email: string) {
-    return this.prisma.user.findUnique({
-      where: { email },
+    return this.prisma.user.findFirst({
+      where: { email: { equals: email, mode: 'insensitive' } },
+    });
+  }
+
+  async findByCrm(crm: string) {
+    return this.prisma.user.findFirst({
+      where: { crm: { equals: crm, mode: 'insensitive' } },
     });
   }
 }

@@ -57,3 +57,18 @@ export function login(email: string, password: string) {
     body: { email, password },
   });
 }
+
+export interface RegisterData {
+  name: string;
+  crm: string;
+  email: string;
+  password: string;
+}
+
+/* Cadastro do pediatra: o backend já devolve o token (entra direto no app) */
+export function register(data: RegisterData) {
+  return apiRequest<{ access_token: string }>('/auth/register', {
+    method: 'POST',
+    body: data,
+  });
+}

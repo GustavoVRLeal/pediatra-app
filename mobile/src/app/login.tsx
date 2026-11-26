@@ -101,6 +101,17 @@ export default function LoginScreen() {
             <Text style={ui.buttonText}>Entrar</Text>
           )}
         </Pressable>
+
+        <Pressable
+          onPress={() => router.push('/register')}
+          hitSlop={8}
+          style={styles.footer}
+          disabled={loading}
+        >
+          <Text style={styles.footerText}>
+            Não tem conta? <Text style={styles.toggleText}>Cadastre-se</Text>
+          </Text>
+        </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
@@ -152,5 +163,13 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 14,
     fontWeight: '600',
+  },
+  footer: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  footerText: {
+    fontSize: 14,
+    color: colors.muted,
   },
 });
