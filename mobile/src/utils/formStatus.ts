@@ -16,3 +16,21 @@ export const questionTypeLabel: Record<QuestionType, string> = {
   DATE: 'Data',
   MULTIPLE_CHOICE: 'Múltipla escolha',
 };
+
+/* Mostra a resposta gravada no banco de forma legível, conforme o tipo da pergunta. */
+export function formatAnswer(type: QuestionType, answer: string): string {
+  if (answer.trim() === '') return 'Não respondida';
+
+  switch (type) {
+    case 'BOOLEAN':
+      return answer === 'true' ? 'Sim' : answer === 'false' ? 'Não' : answer;
+    case 'DATE': {
+      const match = answer.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      return match ? `${match[3]}/${match[2]}/${match[1]}` : answer;
+    }
+    case 'NUMBER':
+      return answer.replace('.', ',');
+    default:
+      return answer;
+  }
+}

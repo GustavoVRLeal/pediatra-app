@@ -71,3 +71,10 @@ export function parsePositiveNumber(text: string): number | null {
 export function formatNumber(value: number): string {
   return String(value).replace('.', ',');
 }
+
+/* "2026-11-26T14:05:00.000Z" -> "26/11/2026 às 11:05" (no fuso do celular) */
+export function formatDateTime(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} às ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}

@@ -70,6 +70,18 @@ export class FormsController {
     return this.formsService.generatePublicLink(id, user.userId);
   }
 
+  /* Encerra o formulário (link público deixa de funcionar) */
+  @Post(':id/close')
+  async close(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.formsService.close(id, user.userId);
+  }
+
+  /* Reabre o formulário encerrado com o mesmo link */
+  @Post(':id/reopen')
+  async reopen(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.formsService.reopen(id, user.userId);
+  }
+
   /* Histórico de preenchimentos do formulário */
   @Get(':id/responses')
   async findResponses(@Param('id') id: string, @CurrentUser() user: AuthUser) {

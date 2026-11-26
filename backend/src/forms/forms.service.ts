@@ -151,8 +151,53 @@ export class FormsService {
     return form;
   }
 
+  /* Encerra o formulário: o link público para de aceitar acessos e respostas.
+     O token é mantido para que, ao reabrir, o mesmo link volte a funcionar. */
+  async close(id: string, userId: string) {
+    const form = await this.assertOwner(id, userId);
+
+    if (!PUBLIC_STATUSES.includes(form.status)) {
+      throw new ConflictException(
+        form.status === 'CLOSED'
+          ? 'O formulário já está encerrado'
+          : 'Só é possível encerrar um formulário que já foi enviado',
+      );
+    }
+
+    return this.prisma.form.update({
+      where: { id },
+      data: { status: 'CLOSED' },
+    });
+  }
+
+  /* Reabre um formulário encerrado com o mesmo link.
+     Volta para ANSWERED se já houver respostas, senão para SENT. */
+  async reopen(id: string, userId: string) {
+    const form = await this.assertOwner(id, userId);
+
+    if (form.status !== 'CLOSED') {
+      throw new ConflictException('Só é possível reabrir um formulário encerrado');
+    }
+
+    const responses = await this.prisma.formResponse.count({
+      where: { formId: id },
+    });
+
+    return this.prisma.form.update({
+      where: { id },
+      data: { status: responses > 0 ? 'ANSWERED' : 'SENT' },
+    });
+  }
+
   async generatePublicLink(id: string, userId: string) {
-    await this.assertOwner(id, userId);
+    const form = await this.assertOwner(id, userId);
+
+    // Encerrado: precisa reabrir antes (evita desfazer o encerramento sem querer)
+    if (form.status === 'CLOSED') {
+      throw new ConflictException(
+        'O formulário está encerrado. Reabra-o antes de gerar um novo link',
+      );
+    }
 
     // Não faz sentido enviar ao responsável um formulário vazio
     const questions = await this.prisma.question.count({ where: { formId: id } });

@@ -90,6 +90,12 @@ export default function PatientDetailScreen() {
         <Row label="Telefone" value={patient.guardianPhone} />
       </View>
 
+      <Link href={{ pathname: '/patients/edit', params: { id: patient.id } }} asChild>
+        <Pressable style={ui.buttonOutline}>
+          <Text style={styles.newFormText}>Editar dados do paciente</Text>
+        </Pressable>
+      </Link>
+
       <View style={styles.card}>
         <Text style={styles.section}>Formulários</Text>
 

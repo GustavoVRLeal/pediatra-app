@@ -5,6 +5,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
@@ -21,8 +22,8 @@ import { formStatusInfo, questionTypeLabel } from '@/utils/formStatus';
 import { colors, ui } from '@/theme';
 
 /* Tela do formulário: dados, edição de título/descrição, perguntas e exclusão.
-   As perguntas são criadas/editadas em /questions/edit e o link público
-   fica no PublicLinkCard. As respostas vêm na próxima etapa. */
+   As perguntas são criadas/editadas em /questions/edit, o link público
+   fica no PublicLinkCard e o histórico de respostas abre em /responses/list. */
 export default function FormDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { token } = useAuth();
@@ -38,6 +39,8 @@ export default function FormDetailScreen() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  const [refreshing, setRefreshing] = useState(false);
+
   const loadForm = useCallback(async () => {
     try {
       const data = await apiRequest<FormDetail>(`/forms/${id}`, { token });
@@ -47,6 +50,13 @@ export default function FormDetailScreen() {
       setError((err as Error).message);
     }
   }, [id, token]);
+
+  // Puxar a tela para baixo atualiza (status e quantidade de respostas)
+  async function handleRefresh() {
+    setRefreshing(true);
+    await loadForm();
+    setRefreshing(false);
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -127,7 +137,11 @@ export default function FormDetailScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <Stack.Screen options={{ title: 'Formulário' }} />
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+      >
         <View style={styles.card}>
           {editing ? (
             <>
@@ -212,6 +226,11 @@ export default function FormDetailScreen() {
           <Link href={{ pathname: '/questions/edit', params: { formId: form.id } }} asChild>
             <Pressable style={ui.buttonOutline}>
               <Text style={styles.linkText}>+ Adicionar pergunta</Text>
+            </Pressable>
+          </Link>
+          <Link href={{ pathname: '/responses/list', params: { formId: form.id } }} asChild>
+            <Pressable style={ui.button}>
+              <Text style={ui.buttonText}>Ver histórico de respostas ({responses})</Text>
             </Pressable>
           </Link>
           {form.questions.length > 0 && (

@@ -46,3 +46,25 @@ export interface FormDetail extends Form {
   questions: Question[];
   publicLink: string | null; // link do web-form, quando já foi gerado
 }
+
+/* Uma resposta dentro de um preenchimento (GET /forms/:id/responses) */
+export interface ResponseAnswer {
+  questionId: string;
+  order: number;
+  question: string;
+  type: QuestionType;
+  answer: string; // sempre texto: "true"/"false", "2024-05-10", "12.5"...
+}
+
+/* Um preenchimento enviado pelo responsável */
+export interface FormResponse {
+  id: string;
+  submittedAt: string;
+  answers: ResponseAnswer[];
+}
+
+export interface FormResponsesList {
+  form: { id: string; title: string; status: FormStatus };
+  totalResponses: number;
+  responses: FormResponse[];
+}

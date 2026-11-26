@@ -10,11 +10,16 @@ interface Props {
   onChanged: () => Promise<void>; // recarrega o formulário (status e link mudam)
 }
 
-/* Cartão do link público: gera o link (status passa a "Enviado")
-   e abre o compartilhamento do celular (WhatsApp, e-mail, SMS...). */
-export function PublicLinkCard({ form, token, onChanged }: Props) {
-  const [generating, setGenerating] = useState(false);
+type Action = 'generate' | 'close' | 'reopen';
 
+/* Cartão do link público. Conforme o status do formulário:
+   - Rascunho: gera o link (status passa a "Enviado") e abre o compartilhamento;
+   - Enviado/Respondido: compartilha, gera um novo link ou encerra;
+   - Encerrado: reabre com o mesmo link. */
+export function PublicLinkCard({ form, token, onChanged }: Props) {
+  const [busy, setBusy] = useState<Action | null>(null);
+
+  const isClosed = form.status === 'CLOSED';
   // O link só funciona com o formulário Enviado ou Respondido
   const activeLink =
     form.publicLink && (form.status === 'SENT' || form.status === 'ANSWERED')
@@ -36,7 +41,7 @@ export function PublicLinkCard({ form, token, onChanged }: Props) {
   }
 
   async function generate() {
-    setGenerating(true);
+    setBusy('generate');
     try {
       const { publicLink } = await apiRequest<{ publicLink: string }>(
         `/forms/${form.id}/public-link`,
@@ -48,7 +53,23 @@ export function PublicLinkCard({ form, token, onChanged }: Props) {
       // Ex.: 400 quando o formulário não tem perguntas
       Alert.alert('Não foi possível gerar o link', (err as Error).message);
     } finally {
-      setGenerating(false);
+      setBusy(null);
+    }
+  }
+
+  /* Encerrar e reabrir: só mudam o status, o link continua o mesmo */
+  async function changeStatus(action: 'close' | 'reopen') {
+    setBusy(action);
+    try {
+      await apiRequest(`/forms/${form.id}/${action}`, { method: 'POST', token });
+      await onChanged();
+    } catch (err) {
+      Alert.alert(
+        action === 'close' ? 'Não foi possível encerrar' : 'Não foi possível reabrir',
+        (err as Error).message,
+      );
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -63,29 +84,72 @@ export function PublicLinkCard({ form, token, onChanged }: Props) {
     );
   }
 
+  function confirmClose() {
+    Alert.alert(
+      'Encerrar formulário',
+      'O link deixará de aceitar respostas. As respostas já recebidas continuam no histórico, e você poderá reabrir depois.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Encerrar', style: 'destructive', onPress: () => changeStatus('close') },
+      ],
+    );
+  }
+
+  /* Botão com indicador de carregamento enquanto a ação roda */
+  function ActionButton({
+    action,
+    label,
+    onPress,
+    variant,
+  }: {
+    action: Action;
+    label: string;
+    onPress: () => void;
+    variant: 'primary' | 'outline' | 'danger';
+  }) {
+    const disabled = busy !== null || (action === 'generate' && noQuestions);
+    const style =
+      variant === 'primary' ? ui.button : variant === 'danger' ? styles.dangerButton : ui.buttonOutline;
+    const textStyle =
+      variant === 'primary' ? ui.buttonText : variant === 'danger' ? styles.dangerText : ui.buttonOutlineText;
+
+    return (
+      <Pressable style={[style, disabled && styles.disabled]} onPress={onPress} disabled={disabled}>
+        {busy === action ? (
+          <ActivityIndicator color={variant === 'primary' ? '#ffffff' : colors.primary} />
+        ) : (
+          <Text style={textStyle}>{label}</Text>
+        )}
+      </Pressable>
+    );
+  }
+
   return (
     <View style={styles.card}>
       <Text style={styles.section}>Link para o responsável</Text>
 
-      {activeLink ? (
+      {isClosed ? (
+        <>
+          <Text style={styles.closed}>
+            Formulário encerrado: o link não aceita novas respostas. Ao reabrir, o mesmo link volta a
+            funcionar.
+          </Text>
+          <ActionButton action="reopen" label="Reabrir formulário" onPress={() => changeStatus('reopen')} variant="primary" />
+        </>
+      ) : activeLink ? (
         <>
           <Text style={styles.link} selectable>
             {activeLink}
           </Text>
-          <Pressable style={ui.button} onPress={() => shareLink(activeLink)} disabled={generating}>
+          <Pressable
+            style={[ui.button, busy !== null && styles.disabled]}
+            onPress={() => shareLink(activeLink)}
+            disabled={busy !== null}
+          >
             <Text style={ui.buttonText}>Compartilhar link</Text>
           </Pressable>
-          <Pressable
-            style={[ui.buttonOutline, generating && styles.disabled]}
-            onPress={confirmRegenerate}
-            disabled={generating}
-          >
-            {generating ? (
-              <ActivityIndicator color={colors.primary} />
-            ) : (
-              <Text style={ui.buttonOutlineText}>Gerar novo link</Text>
-            )}
-          </Pressable>
+          <ActionButton action="generate" label="Gerar novo link" onPress={confirmRegenerate} variant="outline" />
+          <ActionButton action="close" label="Encerrar formulário" onPress={confirmClose} variant="danger" />
         </>
       ) : (
         <>
@@ -94,17 +158,7 @@ export function PublicLinkCard({ form, token, onChanged }: Props) {
               ? 'Adicione pelo menos uma pergunta para poder enviar o formulário.'
               : `Gere o link e envie para ${form.patient.guardianName} preencher, sem precisar de cadastro.`}
           </Text>
-          <Pressable
-            style={[ui.button, (generating || noQuestions) && styles.disabled]}
-            onPress={generate}
-            disabled={generating || noQuestions}
-          >
-            {generating ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={ui.buttonText}>Gerar link e compartilhar</Text>
-            )}
-          </Pressable>
+          <ActionButton action="generate" label="Gerar link e compartilhar" onPress={generate} variant="primary" />
         </>
       )}
     </View>
@@ -138,6 +192,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.muted,
     lineHeight: 20,
+  },
+  closed: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.danger,
+    backgroundColor: colors.dangerBg,
+    borderRadius: 8,
+    padding: 10,
+  },
+  dangerButton: {
+    borderWidth: 1,
+    borderColor: colors.danger,
+    borderRadius: 8,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  dangerText: {
+    color: colors.danger,
+    fontSize: 16,
+    fontWeight: '600',
   },
   disabled: {
     opacity: 0.5,
